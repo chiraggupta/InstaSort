@@ -1,26 +1,32 @@
-import os
-import json
+import os, shutil
 import exiftool
-import shutil
+import json
 
 def findFiles(rootdir, extensions):
     matchedfiles = []
-    dirs = [rootdir]
-    while dirs:
-        cur_dir = dirs[0]
-        del dirs[0]
-        # (path, dirnames, filenames)
-        walk_result = os.walk(cur_dir).next()
-
-        for subdir in walk_result[1]:
-            dirs.append(os.path.join(cur_dir, subdir))
-
-        for f in walk_result[2]:
+    for root, dirs, files in os.walk(rootdir):
+        for f in files:
             extension = os.path.splitext(f)[1].lower()
             if extension.startswith('.') and extension[1:] in extensions:
-                matchedfiles.append(os.path.join(cur_dir, f))
-
+                matchedfiles.append(os.path.join(root, f))
     return matchedfiles
+
+
+def removeEmptyFolders(rootdir):
+    alldirs = []
+    for root, dirs, files in os.walk(rootdir):
+        for d in dirs:
+            alldirs.append(os.path.join(root, d))
+
+    for d in reversed(alldirs):
+        if os.listdir(d):
+            continue
+        try:
+            os.rmdir(d)
+            print "Deleted", d
+        except:
+            print "ERROR: Could not delete", d
+            pass
 
 
 def parseYearAndMonth(datestring):
@@ -62,7 +68,7 @@ def collectDateMetadata(files):
                 dateMetadata[year][month] = []
             dateMetadata[year][month].append(filename)
         else:
-            print "No valid date found in", filename
+            print "ERROR: No valid date found in", filename
     return dateMetadata
 
 
@@ -86,7 +92,7 @@ def organizeFiles(rootdir, metadata):
                 try:
                     shutil.move(filepath, folderpath)
                 except shutil.Error:
-                    print "Failed to move [%s] to [%s]" % (filepath, folderpath)
+                    print "ERROR: Failed to move [%s] to [%s]" % (filepath, folderpath)
                     pass
 
 
@@ -96,6 +102,9 @@ if __name__ == '__main__':
     filteredfiles = findFiles(rootdir, filetypes)
 
     dateMetadata = collectDateMetadata(filteredfiles)
-    # print json.dumps(dateMetadata, indent = 1, sort_keys = True)
+    # print json.dumps(dateMetadata, indent=1, sort_keys=True)
     organizeFiles(rootdir, dateMetadata)
-    print "Done :)"
+
+    # removeEmptyFolders(rootdir)
+    print "\nDone :)"
+
