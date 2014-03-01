@@ -57,5 +57,3 @@ def printMetadata(files):
 if __name__ == '__main__':
     filestoprocess = fetchFilesWithExtensions('/Users/cgupta/Desktop', ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'avi',])
     printMetadata(filestoprocess)
-
-    print
