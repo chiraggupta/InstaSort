@@ -1,6 +1,5 @@
 import os
 import json
-import time
 import exiftool
 
 def fetchFilesWithExtensions(rootdir, extensions):
@@ -30,11 +29,13 @@ def getYearAndMonth(datestring):
     return year, month
 
 
-def printMetadata(files):
+def collectMetadata(files):
+    sortedFilenames = {}
     with exiftool.ExifTool() as et:
         metadata = et.get_metadata_batch(files)
     for md in metadata:
-        print md['SourceFile']
+        filename = md['SourceFile']
+        del md['SourceFile']
         year, month, selectedkey = 99999, 99, ''
         for k in md.keys():
             klower = k.lower()
@@ -50,10 +51,20 @@ def printMetadata(files):
 
         # Check if valid year/month were found
         if year != 9999 and month != 99:
-            print "Year: ", year
-            print "Month: ", month
-            print
+            month = str(month).zfill(2)
+            # Construct multi level dict with year: month: [filenames]
+            if not year in sortedFilenames:
+                sortedFilenames[year] = {}
+            if not month in sortedFilenames[year]:
+                sortedFilenames[year][month] = []
+            sortedFilenames[year][month].append(filename)
+    return sortedFilenames
+
+def organize():
+    return True
 
 if __name__ == '__main__':
-    filestoprocess = fetchFilesWithExtensions('/Users/cgupta/Desktop', ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'avi',])
-    printMetadata(filestoprocess)
+    rootdir = '/Users/cgupta/Desktop'
+    fileextensions = ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'avi',]
+    filteredfiles = fetchFilesWithExtensions(rootdir, fileextensions)
+    print json.dumps(collectMetadata(filteredfiles), indent = 1, sort_keys = True)
