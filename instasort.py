@@ -1,8 +1,9 @@
 import os
 import json
 import exiftool
+import shutil
 
-def fetchFilesWithExtensions(rootdir, extensions):
+def findFiles(rootdir, extensions):
     matchedfiles = []
     dirs = [rootdir]
     while dirs:
@@ -21,7 +22,8 @@ def fetchFilesWithExtensions(rootdir, extensions):
 
     return matchedfiles
 
-def getYearAndMonth(datestring):
+
+def parseYearAndMonth(datestring):
     year, month = 9999, 99
     if isinstance(datestring, basestring) and len(datestring) > 10:
         year = int(datestring[0:4])
@@ -29,20 +31,20 @@ def getYearAndMonth(datestring):
     return year, month
 
 
-def collectMetadata(files):
-    sortedFilenames = {}
+def collectDateMetadata(files):
+    dateMetadata = {}
     with exiftool.ExifTool() as et:
-        metadata = et.get_metadata_batch(files)
-    for md in metadata:
-        filename = md['SourceFile']
-        del md['SourceFile']
+        allmetadata = et.get_metadata_batch(files)
+    for metadata in allmetadata:
+        filename = metadata['SourceFile']
+        del metadata['SourceFile']
         year, month, selectedkey = 99999, 99, ''
-        for k in md.keys():
+        for k in metadata.keys():
             klower = k.lower()
             if 'date' not in klower:
-                del md[k]
+                del metadata[k]
                 continue
-            thisyear, thismonth = getYearAndMonth(md[k])
+            thisyear, thismonth = parseYearAndMonth(metadata[k])
             if klower == 'exif:datetimeoriginal':
                 year, month, selectedkey = thisyear, thismonth, k
                 break
@@ -51,20 +53,49 @@ def collectMetadata(files):
 
         # Check if valid year/month were found
         if year != 9999 and month != 99:
+            year = str(year)
             month = str(month).zfill(2)
             # Construct multi level dict with year: month: [filenames]
-            if not year in sortedFilenames:
-                sortedFilenames[year] = {}
-            if not month in sortedFilenames[year]:
-                sortedFilenames[year][month] = []
-            sortedFilenames[year][month].append(filename)
-    return sortedFilenames
+            if not year in dateMetadata:
+                dateMetadata[year] = {}
+            if not month in dateMetadata[year]:
+                dateMetadata[year][month] = []
+            dateMetadata[year][month].append(filename)
+        else:
+            print "No valid date found in", filename
+    return dateMetadata
 
-def organize():
-    return True
+
+def makeFolder(folderpath):
+    try:
+        os.mkdir(folderpath)
+    except OSError:
+        pass
+
+
+def organizeFiles(rootdir, metadata):
+    for year in metadata:
+        folderpath = os.path.join(rootdir, year)
+        makeFolder(folderpath)
+        for month in metadata[year]:
+            folderpath = os.path.join(rootdir, year, month)
+            makeFolder(folderpath)
+            for filepath in metadata[year][month]:
+                if os.path.dirname(filepath) == folderpath:
+                    continue
+                try:
+                    shutil.move(filepath, folderpath)
+                except shutil.Error:
+                    print "Failed to move [%s] to [%s]" % (filepath, folderpath)
+                    pass
+
 
 if __name__ == '__main__':
     rootdir = '/Users/cgupta/Desktop'
-    fileextensions = ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'avi',]
-    filteredfiles = fetchFilesWithExtensions(rootdir, fileextensions)
-    print json.dumps(collectMetadata(filteredfiles), indent = 1, sort_keys = True)
+    filetypes = ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'avi',]
+    filteredfiles = findFiles(rootdir, filetypes)
+
+    dateMetadata = collectDateMetadata(filteredfiles)
+    # print json.dumps(dateMetadata, indent = 1, sort_keys = True)
+    organizeFiles(rootdir, dateMetadata)
+    print "Done :)"
