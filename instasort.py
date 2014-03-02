@@ -1,4 +1,5 @@
 import os, shutil
+import time
 import exiftool
 import json
 
@@ -17,6 +18,10 @@ def removeEmptyFolders(rootdir):
     for root, dirs, files in os.walk(rootdir):
         for d in dirs:
             alldirs.append(os.path.join(root, d))
+        for f in files:
+            if f.startswith("."):
+                os.remove(os.path.join(root, f))
+                print f
 
     for d in reversed(alldirs):
         if os.listdir(d):
@@ -32,33 +37,60 @@ def removeEmptyFolders(rootdir):
 def parseYearAndMonth(datestring):
     year, month = 9999, 99
     if isinstance(datestring, basestring) and len(datestring) > 10:
-        year = int(datestring[0:4])
-        month = int(datestring[5:7])
+        try:
+            year = int(datestring[0:4])
+            month = int(datestring[5:7])
+        except ValueError:
+            pass
     return year, month
 
 
-def collectDateMetadata(files):
+def collectDateMetadata(files, print_logs=False):
     dateMetadata = {}
     with exiftool.ExifTool() as et:
         allmetadata = et.get_metadata_batch(files)
     for metadata in allmetadata:
+        good_exif_found = False
         filename = metadata['SourceFile']
-        del metadata['SourceFile']
+        if print_logs:
+            print "File:", filename
         year, month, selectedkey = 99999, 99, ''
+
         for k in metadata.keys():
             klower = k.lower()
-            if 'date' not in klower:
-                del metadata[k]
+            if 'date' not in klower or klower.startswith('icc_profile'):
                 continue
             thisyear, thismonth = parseYearAndMonth(metadata[k])
             if klower == 'exif:datetimeoriginal':
                 year, month, selectedkey = thisyear, thismonth, k
+                good_exif_found = True
                 break
-            if thisyear <= year and thismonth < month:
+            if thisyear < year or (thisyear == year and thismonth < month):
                 year, month, selectedkey = thisyear, thismonth, k
+                if print_logs:
+                    print "Metadata Tag:", selectedkey, metadata[selectedkey]
+
+        if not good_exif_found:
+            selectedtime = modifiedtime = time.gmtime(os.path.getmtime(filename))
+            createdtime = time.gmtime(os.path.getctime(filename))
+            if createdtime < modifiedtime:
+                selectedtime = createdtime
+            selectedmonth = int(time.strftime("%m", selectedtime))
+            selectedyear = int(time.strftime("%Y", selectedtime))
+            if print_logs:
+                print "File Timestamp:", time.strftime("%Y:%m:%d %H:%M:%S", (selectedtime))
+
+            if selectedyear < year or (selectedyear == year and selectedmonth < month):
+                year, month, selectedkey = selectedyear, selectedmonth, None
 
         # Check if valid year/month were found
         if year != 9999 and month != 99:
+            if print_logs:
+                if selectedkey:
+                    print "Selected Tag:", selectedkey, metadata[selectedkey]
+                else:
+                    print "Using File Timestamp"
+                print
             year = str(year)
             month = str(month).zfill(2)
             # Construct multi level dict with year: month: [filenames]
@@ -97,14 +129,21 @@ def organizeFiles(rootdir, metadata):
 
 
 if __name__ == '__main__':
-    rootdir = '/Users/cgupta/Desktop'
+    LOGS_ENABLED = False
+    rootdir = '/Users/cgupta/Downloads/InstaSort'
     filetypes = ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'avi',]
     filteredfiles = findFiles(rootdir, filetypes)
 
-    dateMetadata = collectDateMetadata(filteredfiles)
-    # print json.dumps(dateMetadata, indent=1, sort_keys=True)
+    if not filteredfiles:
+        print "ERROR: No media files found."
+        exit(0)
+
+    dateMetadata = collectDateMetadata(filteredfiles, print_logs=LOGS_ENABLED)
+    if LOGS_ENABLED:
+        print json.dumps(dateMetadata, indent=1, sort_keys=True)
+
     organizeFiles(rootdir, dateMetadata)
 
-    # removeEmptyFolders(rootdir)
+    removeEmptyFolders(rootdir)
     print "\nDone :)"
 
