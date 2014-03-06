@@ -3,7 +3,7 @@ import time
 import exiftool
 import json
 
-LOGS_ENABLED = True
+LOGS_ENABLED = False
 
 def findFiles(rootdir, extensions):
     matchedfiles = []
@@ -135,10 +135,19 @@ def collectDateMetadata(files):
             print "ERROR: No valid date found for", filename
     return date_metadata
 
+# Hacky temp function
+def renameFiles():
+    root = ''
+    offset = 0
+    filelist = os.listdir(root)
+
+    for f in filelist:
+        newf = 'DSC_' + str(int(f[4:-4]) + offset ).zfill(4) + '.JPG'
+        os.rename(os.path.join(root, f), os.path.join(root, newf))
 
 if __name__ == '__main__':
-    rootdir = '/Users/cgupta/Downloads/InstaSort'
-    filetypes = ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'avi',]
+    rootdir = ''
+    filetypes = ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'avi', 'mov', 'nef']
     filteredfiles = findFiles(rootdir, filetypes)
 
     if not filteredfiles:
